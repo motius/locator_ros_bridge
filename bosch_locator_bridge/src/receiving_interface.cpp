@@ -341,8 +341,21 @@ ClientLocalizationPoseInterface::ClientLocalizationPoseInterface(
 
 size_t ClientLocalizationPoseInterface::tryToParseData(
   const std::vector<char> & datagram,
-  rclcpp::Node::SharedPtr /*node*/)
+  rclcpp::Node::SharedPtr node)
 {
+  // checks for queue size:
+  int msg_len = 172;
+
+  auto dv = std::div(datagram.size(), msg_len);
+  int queued_msg_cnt = dv.quot;
+  // int remaining_byte_cnt = dv.rem; // should be zero
+
+  if (queued_msg_cnt > 1)
+  {
+    RCLCPP_ERROR(node->get_logger(),
+          "Queue is not empty, deleting %i telegrams", queued_msg_cnt-1);  
+  }
+
   // convert datagram to ros messages
   bosch_locator_bridge::msg::ClientLocalizationPose client_localization_pose;
   geometry_msgs::msg::PoseStamped pose;
@@ -370,8 +383,25 @@ size_t ClientLocalizationPoseInterface::tryToParseData(
     client_localization_pose_pub_->publish(client_localization_pose);
     client_localization_pose_pose_pub_->publish(poseWithCov);
     client_localization_pose_lidar_odo_pose_pub_->publish(lidar_odo_pose);
+
+    /*
+    double t = pose.header.stamp.sec + pose.header.stamp.nanosec / 1e9;
+    auto dt_s = (node->now().seconds() - t);
+    RCLCPP_INFO_THROTTLE(node->get_logger(), *node->get_clock(), 3000, 
+              "ClientLocalizationPoseInterface \n ROS_TIME: %10.2f \
+              \n POSE_TIME: %10.2f \
+              \n queued messages: %i \
+              \n TIME_DIFF: %.1f ms \
+              \n pose_x: %.2f \
+              \n pose_y: %.2f \n", 
+              node->now().seconds(), queued_msg_cnt, t, dt_s*1000, 
+              pose.pose.position.x, pose.pose.position.y);
+    */
+              
   }
-  return bytes_parsed;
+
+  return datagram.size(); // rather hacky way to clear the queue
+  // return bytes_parsed;
 }
 
 ClientGlobalAlignVisualizationInterface::ClientGlobalAlignVisualizationInterface(
